@@ -8,11 +8,17 @@ const TEACHER_AUTH_KEY = 'auth_teacher_session';
 const STUDENT_LOGS_KEY = 'student_history_logs';
 const TEACHER_LOGS_KEY = 'teacher_history_logs';
 
+export const DEFAULT_APPS_SCRIPT_URL =
+  'https://script.google.com/macros/s/AKfycbwyWvlc6f32RTL_c-efa1QmaU7emBj6zQj4qfTLmA_bAVS6flwqxyE1sCAMt-JdxmYLYw/exec';
+
 export function getAppsScriptUrl(): string {
+  const custom = localStorage.getItem(APPS_SCRIPT_STORAGE_KEY);
+  if (custom && custom.trim().length > 0) {
+    return custom.trim();
+  }
   return (
-    localStorage.getItem(APPS_SCRIPT_STORAGE_KEY) ||
     (import.meta.env.VITE_APPS_SCRIPT_URL as string) ||
-    ''
+    DEFAULT_APPS_SCRIPT_URL
   );
 }
 
