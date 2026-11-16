@@ -1,0 +1,233 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'nguyenhaiquan1234@gmail.com';
+    }
+
+    function isOwner(uid) {
+      return isVerifiedUser() && request.auth.uid == uid;
+    }
+
+    function isTeacher() {
+      return isVerifiedUser() && (
+        isBootstrappedAdmin() ||
+        exists(/databases/$(database)/documents/teachers/$(request.auth.uid))
+      );
+    }
+
+    // --- Entity Validation Blueprints ---
+    function hasActivityKeys(data) {
+      let allowed = [
+        'title', 'slug', 'group', 'expressions', 'durationMinutes', 'scale',
+        'materials', 'noMaterialsNeeded', 'shortDescription', 'goal', 'steps',
+        'transitionBackTip', 'teacherNotes', 'suitableTiming', 'gradeRange',
+        'status', 'authorId', 'authorName', 'createdAt', 'updatedAt'
+      ];
+      return data.keys().hasAll(allowed) && data.keys().hasOnly(allowed);
+    }
+
+    function isValidActivity(data) {
+      return data.title is string && data.title.size() >= 3 && data.title.size() <= 140
+        && data.slug is string && data.slug.size() >= 3 && data.slug.size() <= 160 && data.slug.matches('^[a-z0-9\\-]+$')
+        && data.group in ['van-dong', 'quan-sat', 'ghi-nho', 'phan-xa', 'tuong-tac', 'thu-gian']
+        && data.expressions is list && data.expressions.size() >= 1 && data.expressions.size() <= 6
+        && data.expressions.hasOnly(['met-moi', 'nhin-ra-ngoai', 'noi-chuyen-rieng', 'phan-hoi-cham', 'it-tham-gia', 'kho-duy-tri'])
+        && data.durationMinutes is number && data.durationMinutes >= 1 && data.durationMinutes <= 15
+        && data.scale in ['Cả lớp', 'Theo nhóm', 'Theo cặp', 'Cá nhân tại chỗ']
+        && data.materials is string && data.materials.size() >= 1 && data.materials.size() <= 200
+        && data.noMaterialsNeeded is bool
+        && data.shortDescription is string && data.shortDescription.size() >= 10 && data.shortDescription.size() <= 320
+        && data.goal is string && data.goal.size() >= 5 && data.goal.size() <= 400
+        && data.steps is list && data.steps.size() >= 1 && data.steps.size() <= 10
+        && data.steps[0] is string && data.steps[0].size() >= 3 && data.steps[0].size() <= 400
+        && data.transitionBackTip is string && data.transitionBackTip.size() >= 5 && data.transitionBackTip.size() <= 300
+        && data.teacherNotes is string && data.teacherNotes.size() <= 500
+        && data.suitableTiming in ['Đầu tiết', 'Giữa tiết', 'Chuyển tiếp nhiệm vụ', 'Cuối tiết', 'Linh hoạt']
+        && data.gradeRange is string && data.gradeRange.size() >= 2 && data.gradeRange.size() <= 60
+        && data.status in ['published', 'hidden']
+        && data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128
+        && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTeacher(data) {
+      return data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 100
+        && data.role in ['teacher', 'admin']
+        && data.addedBy is string && data.addedBy.size() >= 1 && data.addedBy.size() <= 128
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTeacherRequest(data) {
+      return data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 100
+        && data.schoolName is string && data.schoolName.size() >= 2 && data.schoolName.size() <= 140
+        && data.note is string && data.note.size() <= 300
+        && data.status in ['pending', 'approved', 'rejected']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLibraryMeta(data) {
+      return data.seeded is bool
+        && data.totalSeededCount is number && data.totalSeededCount >= 0 && data.totalSeededCount <= 500
+        && data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Collection: /activities/{activityId} ---
+    match /activities/{activityId} {
+      allow get: if isValidId(activityId) && (
+        resource == null ||
+        resource.data.status == 'published' ||
+        isTeacher()
+      );
+
+      allow list: if resource.data.status == 'published'
+        || isBootstrappedAdmin()
+        || (isVerifiedUser() && resource.data.authorId == request.auth.uid);
+
+      allow create: if isVerifiedUser()
+        && isValidId(activityId)
+        && hasActivityKeys(incoming())
+        && isValidActivity(incoming())
+        && incoming().authorId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isTeacher();
+
+      allow update: if isVerifiedUser()
+        && isValidId(activityId)
+        && isValidActivity(incoming())
+        && incoming().authorId == existing().authorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && isTeacher()
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'slug', 'group', 'expressions', 'durationMinutes', 'scale',
+            'materials', 'noMaterialsNeeded', 'shortDescription', 'goal', 'steps',
+            'transitionBackTip', 'teacherNotes', 'suitableTiming', 'gradeRange',
+            'status', 'authorName', 'updatedAt'
+          ])
+        );
+
+      allow delete: if isValidId(activityId)
+        && isTeacher()
+        && (isBootstrappedAdmin() || existing().authorId == request.auth.uid);
+    }
+
+    // --- Collection: /teachers/{teacherId} ---
+    match /teachers/{teacherId} {
+      allow get: if isValidId(teacherId) && (isOwner(teacherId) || isBootstrappedAdmin());
+      allow list: if isBootstrappedAdmin();
+
+      allow create: if isBootstrappedAdmin()
+        && isValidId(teacherId)
+        && incoming().keys().hasAll(['uid', 'displayName', 'role', 'addedBy', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly(['uid', 'displayName', 'role', 'addedBy', 'createdAt', 'updatedAt'])
+        && isValidTeacher(incoming())
+        && incoming().uid == teacherId
+        && incoming().addedBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isBootstrappedAdmin()
+        && isValidId(teacherId)
+        && isValidTeacher(incoming())
+        && incoming().uid == existing().uid
+        && incoming().addedBy == existing().addedBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'role', 'updatedAt']);
+
+      allow delete: if isValidId(teacherId) && isBootstrappedAdmin();
+    }
+
+    // --- Collection: /teacher_requests/{requestId} ---
+    match /teacher_requests/{requestId} {
+      allow get: if isValidId(requestId) && (isOwner(requestId) || isBootstrappedAdmin());
+      allow list: if isBootstrappedAdmin() || (isVerifiedUser() && resource.data.uid == request.auth.uid);
+
+      allow create: if isOwner(requestId)
+        && isValidId(requestId)
+        && incoming().keys().hasAll(['uid', 'displayName', 'schoolName', 'note', 'status', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly(['uid', 'displayName', 'schoolName', 'note', 'status', 'createdAt', 'updatedAt'])
+        && isValidTeacherRequest(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().status == 'pending'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedUser()
+        && isValidId(requestId)
+        && isValidTeacherRequest(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (isOwner(requestId) && existing().status == 'pending' && incoming().status == 'pending'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'schoolName', 'note', 'updatedAt'])) ||
+          (isBootstrappedAdmin()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+
+      allow delete: if isValidId(requestId) && (isOwner(requestId) || isBootstrappedAdmin());
+    }
+
+    // --- Collection: /library_meta/{metaId} ---
+    match /library_meta/{metaId} {
+      allow get: if isValidId(metaId) && metaId == 'config';
+
+      allow create: if isVerifiedUser()
+        && isValidId(metaId)
+        && metaId == 'config'
+        && incoming().keys().hasAll(['seeded', 'totalSeededCount', 'updatedBy', 'updatedAt'])
+        && incoming().keys().hasOnly(['seeded', 'totalSeededCount', 'updatedBy', 'updatedAt'])
+        && isValidLibraryMeta(incoming())
+        && incoming().updatedBy == request.auth.uid
+        && incoming().updatedAt == request.time
+        && isTeacher();
+
+      allow update: if isVerifiedUser()
+        && isValidId(metaId)
+        && metaId == 'config'
+        && isValidLibraryMeta(incoming())
+        && incoming().updatedBy == request.auth.uid
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['seeded', 'totalSeededCount', 'updatedBy', 'updatedAt'])
+        && isTeacher();
+    }
+  }
+}

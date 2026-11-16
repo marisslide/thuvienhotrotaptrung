@@ -1,0 +1,6 @@
+{
+  "name": "Thư viện hoạt động hỗ trợ tái tập trung",
+  "description": "Thư viện số hỗ trợ giáo viên THCS nhận diện biểu hiện, lựa chọn hoạt động ngắn 2–5 phút và giúp học sinh quay lại nhiệm vụ học tập.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
