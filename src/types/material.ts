@@ -26,10 +26,23 @@ export interface MaterialItem {
 }
 
 export interface StudentProfile {
+  id?: string;
   fullName: string;
   className: string;
   schoolName: string;
   registeredAt: string;
+}
+
+export interface StudentDirectoryItem {
+  studentId: string;
+  fullName: string;
+  className: string;
+  schoolName: string;
+  startTime: string;
+  lastActiveTime: string;
+  visitCount: number;
+  durationMinutes: number;
+  status: string;
 }
 
 export interface TeacherSession {

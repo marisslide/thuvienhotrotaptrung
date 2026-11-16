@@ -41,6 +41,17 @@ Dành cho: **Thư viện Hoạt động Hỗ trợ Tái tập trung (Cô Diệu 
 ---
 
 ### Kết quả tự động:
-- **Tab `HocSinh_LichSu`**: Tự động lưu họ tên, lớp, trường của học sinh khi đăng ký và mọi hoạt động học tập, thời lượng sử dụng, học liệu đã xem.
+- **Tab `DanhSach_HocVien`**: Tự động lưu trữ danh sách học sinh (Mã HS, Họ tên, Lớp, Trường THCS), thời điểm đăng ký, lần truy cập gần nhất, số lần vào app và **tổng thời lượng truy cập app (tính bằng phút)** được cộng dồn theo thời gian thực!
+- **Tab `HocSinh_LichSu`**: Tự động lưu nhật ký chi tiết từng thao tác học tập của học sinh (đăng ký thông tin, mở hoạt động, xem video/slide, dùng bộ đếm giờ).
 - **Tab `GiaoVien_LichSu`**: Tự động ghi nhận lịch sử giáo viên tải học liệu, chỉnh sửa, xóa học liệu và duyệt hoạt động.
 - **Thư mục Google Drive `HocLieu_TaiTapTrung`**: Mọi video, word, powerpoint, hình ảnh giáo viên tải lên sẽ được tự động lưu vào Google Drive, cấp quyền xem công khai và hiển thị trực tiếp cho học sinh!
+
+---
+
+### Lưu ý khi cập nhật phiên bản mã mới:
+Nếu bạn đã tạo Apps Script trước đó, mỗi khi cập nhật mã mới trong `google-apps-script/Code.gs`:
+1. Dán đè mã mới vào Apps Script và bấm Lưu (`Ctrl + S`).
+2. Nhấn nút **Triển khai** (Deploy) ➔ Chọn **Quản lý phiên triển khai** (Manage deployments).
+3. Bấm biểu tượng cây bút chì ✏️ để chỉnh sửa.
+4. Ở mục "Phiên bản" (Version), chọn **Phiên bản mới** (New version).
+5. Bấm **Triển khai** (Deploy) để cập nhật mà không làm đổi đường dẫn URL Web App!

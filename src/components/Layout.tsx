@@ -14,6 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   getStudentProfile,
   logStudentActivity,
+  syncStudentSessionDuration,
 } from '../lib/googleSyncService';
 import { StudentProfile } from '../types/material';
 import { StudentWelcomeModal } from './StudentWelcomeModal';
@@ -60,6 +61,30 @@ export function Layout({ children }: { children: React.ReactNode }) {
       logStudentActivity('TRUY CẬP TRANG', title);
     }
   }, [location.pathname, isAuthorizedTeacher, studentProfile]);
+
+  // Tự động tính thời lượng truy cập của học viên và đồng bộ vào Sheet "DanhSach_HocVien"
+  useEffect(() => {
+    if (isAuthorizedTeacher || !studentProfile) return;
+
+    // Gửi tín hiệu bắt đầu phiên
+    syncStudentSessionDuration(0, true, 'Đang học tập');
+
+    // Cứ mỗi 60 giây (1 phút) đồng bộ +1 phút thời lượng vào Sheet DanhSach_HocVien
+    const interval = setInterval(() => {
+      syncStudentSessionDuration(1, false, 'Đang học tập');
+    }, 60000);
+
+    const handleBeforeUnload = () => {
+      syncStudentSessionDuration(0, false, 'Đã hoàn thành');
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isAuthorizedTeacher, studentProfile]);
 
   const teacherName = teacherSession?.displayName || user?.displayName || 'Cô Diệu Hiền';
 

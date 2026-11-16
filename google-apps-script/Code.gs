@@ -3,23 +3,17 @@
  * THƯ VIỆN HOẠT ĐỘNG HỖ TRỢ TÁI TẬP TRUNG
  * Tác giả: Cô Diệu Hiền
  *
- * HƯỚNG DẪN CÀI ĐẶT:
- * 1. Mở một Google Spreadsheet mới (https://sheets.new)
- * 2. Đặt tên: "Thư Viện Tái Tập Trung - Dữ Liệu & Nhật Ký"
- * 3. Vào menu: Tiện ích mở rộng (Extensions) -> Apps Script
- * 4. Dán toàn bộ nội dung mã này vào tệp Code.gs và nhấn biểu tượng Lưu (Ctrl+S)
- * 5. Nhấn nút "Triển khai" (Deploy) -> "Tùy chọn triển khai mới" (New deployment)
- * 6. Chọn loại "Ứng dụng web" (Web app):
- *    - Mô tả: "API Thu Vien Tai Tap Trung"
- *    - Người thực thi (Execute as): "Tôi" (Me)
- *    - Ai có quyền truy cập (Who has access): "Bất kỳ ai" (Anyone)
- * 7. Nhấn "Triển khai", cấp quyền khi Google hỏi, sau đó sao chép "URL ứng dụng web" (Web App URL)
- * 8. Dán URL này vào mục cài đặt trên website hoặc tệp .env (VITE_APPS_SCRIPT_URL)
+ * CÁC TAB TỰ ĐỘNG TẠO:
+ * 1. DanhSach_HocVien: Danh sách học sinh và tổng thời lượng truy cập app
+ * 2. HocSinh_LichSu: Nhật ký chi tiết từng thao tác học tập của học sinh
+ * 3. GiaoVien_LichSu: Nhật ký các thao tác của giáo viên quản trị
+ * 4. HocLieu: Danh mục học liệu (Video, Slide, Word, PDF...)
  */
 
 const FOLDER_NAME = 'HocLieu_TaiTapTrung';
-const TAB_STUDENT = 'HocSinh_LichSu';
-const TAB_TEACHER = 'GiaoVien_LichSu';
+const TAB_STUDENT_LIST = 'DanhSach_HocVien';
+const TAB_STUDENT_LOGS = 'HocSinh_LichSu';
+const TAB_TEACHER_LOGS = 'GiaoVien_LichSu';
 const TAB_MATERIALS = 'HocLieu';
 
 function doPost(e) {
@@ -28,10 +22,71 @@ function doPost(e) {
     const data = JSON.parse(rawData);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // 1. Ghi lịch sử hoạt động của Học sinh
+    // 1. Cập nhật Sheet "DanhSach_HocVien" (Lưu thông tin học sinh & thời lượng sử dụng app)
+    if (data.action === 'SYNC_STUDENT_SESSION') {
+      const p = data.payload || {};
+      const sheet = getOrCreateSheet(ss, TAB_STUDENT_LIST, [
+        'Mã học viên',
+        'Họ và tên học sinh',
+        'Lớp',
+        'Trường THCS',
+        'Thời điểm bắt đầu',
+        'Lần truy cập gần nhất',
+        'Số lần truy cập',
+        'Tổng thời lượng (phút)',
+        'Trạng thái phiên',
+      ]);
+
+      const studentKey = (p.studentId || (p.fullName + '_' + p.className)).trim().toLowerCase();
+      const dataRange = sheet.getDataRange().getValues();
+      let rowIndex = -1;
+
+      for (let i = 1; i < dataRange.length; i++) {
+        const rowId = String(dataRange[i][0] || '').trim().toLowerCase();
+        const rowNameClass = (String(dataRange[i][1] || '') + '_' + String(dataRange[i][2] || '')).trim().toLowerCase();
+        if (rowId === studentKey || rowNameClass === studentKey) {
+          rowIndex = i + 1;
+          break;
+        }
+      }
+
+      const nowStr = p.timestamp || new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+      const addedMinutes = Number(p.durationMinutes || 0);
+
+      if (rowIndex === -1) {
+        // Thêm học viên mới
+        const initMinutes = addedMinutes > 0 ? addedMinutes : 1;
+        sheet.appendRow([
+          p.studentId || 'HS-' + new Date().getTime(),
+          p.fullName || '',
+          p.className || '',
+          p.schoolName || '',
+          nowStr,
+          nowStr,
+          1,
+          Number(initMinutes.toFixed(1)),
+          p.status || 'Đang học tập',
+        ]);
+      } else {
+        // Cập nhật học viên đã có
+        const currentVisits = Number(sheet.getRange(rowIndex, 7).getValue() || 1);
+        const currentDuration = Number(sheet.getRange(rowIndex, 8).getValue() || 0);
+        const newVisits = p.isNewSession ? currentVisits + 1 : currentVisits;
+        const newDuration = Number((currentDuration + addedMinutes).toFixed(1));
+
+        sheet.getRange(rowIndex, 6).setValue(nowStr);
+        sheet.getRange(rowIndex, 7).setValue(newVisits);
+        sheet.getRange(rowIndex, 8).setValue(newDuration);
+        sheet.getRange(rowIndex, 9).setValue(p.status || 'Đang học tập');
+      }
+
+      return createJsonResponse({ success: true, message: 'Đã cập nhật DanhSach_HocVien' });
+    }
+
+    // 2. Ghi lịch sử hoạt động chi tiết của Học sinh
     if (data.action === 'LOG_STUDENT') {
       const p = data.payload || {};
-      const sheet = getOrCreateSheet(ss, TAB_STUDENT, [
+      const sheet = getOrCreateSheet(ss, TAB_STUDENT_LOGS, [
         'Thời gian',
         'Họ và tên học sinh',
         'Lớp',
@@ -49,13 +104,17 @@ function doPost(e) {
         p.detail || '',
         p.notes || '',
       ]);
+
+      // Tự động đảm bảo học sinh cũng có mặt trong DanhSach_HocVien
+      syncStudentToDirectory(ss, p);
+
       return createJsonResponse({ success: true, message: 'Đã lưu log học sinh' });
     }
 
-    // 2. Ghi lịch sử hoạt động của Giáo viên
+    // 3. Ghi lịch sử hoạt động của Giáo viên
     if (data.action === 'LOG_TEACHER') {
       const p = data.payload || {};
-      const sheet = getOrCreateSheet(ss, TAB_TEACHER, [
+      const sheet = getOrCreateSheet(ss, TAB_TEACHER_LOGS, [
         'Thời gian',
         'Tên giáo viên',
         'Hành động',
@@ -72,7 +131,7 @@ function doPost(e) {
       return createJsonResponse({ success: true, message: 'Đã lưu log giáo viên' });
     }
 
-    // 3. Tải tệp lên Google Drive và lưu vào mục Học liệu
+    // 4. Tải tệp lên Google Drive và lưu vào mục Học liệu
     if (data.action === 'UPLOAD_FILE') {
       const folder = getOrCreateFolder(FOLDER_NAME);
       const decodedBytes = Utilities.base64Decode(data.fileData);
@@ -83,7 +142,6 @@ function doPost(e) {
       const fileUrl = file.getUrl();
       const fileId = file.getId();
 
-      // Lưu vào sheet Học liệu
       const sheet = getOrCreateSheet(ss, TAB_MATERIALS, [
         'ID',
         'Tiêu đề học liệu',
@@ -108,8 +166,7 @@ function doPost(e) {
         new Date().toISOString().slice(0, 10),
       ]);
 
-      // Ghi log giáo viên
-      const teacherSheet = getOrCreateSheet(ss, TAB_TEACHER, [
+      const teacherSheet = getOrCreateSheet(ss, TAB_TEACHER_LOGS, [
         'Thời gian',
         'Tên giáo viên',
         'Hành động',
@@ -132,7 +189,7 @@ function doPost(e) {
       });
     }
 
-    // 4. Lưu học liệu mới hoặc cập nhật
+    // 5. Lưu học liệu mới hoặc cập nhật
     if (data.action === 'SAVE_MATERIAL') {
       const p = data.payload || {};
       const sheet = getOrCreateSheet(ss, TAB_MATERIALS, [
@@ -171,15 +228,34 @@ function doGet(e) {
     const action = e.parameter ? e.parameter.action : '';
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
+    // Lấy danh sách học viên và thời lượng
+    if (action === 'GET_STUDENTS') {
+      const sheet = ss.getSheetByName(TAB_STUDENT_LIST);
+      if (!sheet) return createJsonResponse({ students: [] });
+      const data = sheet.getDataRange().getValues();
+      const students = [];
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        if (!row[1]) continue;
+        students.push({
+          studentId: row[0],
+          fullName: row[1],
+          className: row[2],
+          schoolName: row[3],
+          startTime: row[4],
+          lastActiveTime: row[5],
+          visitCount: row[6],
+          durationMinutes: row[7],
+          status: row[8],
+        });
+      }
+      return createJsonResponse({ students: students });
+    }
+
     if (action === 'GET_MATERIALS') {
       const sheet = ss.getSheetByName(TAB_MATERIALS);
-      if (!sheet) {
-        return createJsonResponse({ materials: [] });
-      }
+      if (!sheet) return createJsonResponse({ materials: [] });
       const data = sheet.getDataRange().getValues();
-      if (data.length <= 1) {
-        return createJsonResponse({ materials: [] });
-      }
       const materials = [];
       for (let i = 1; i < data.length; i++) {
         const row = data[i];
@@ -208,6 +284,44 @@ function doGet(e) {
   } catch (error) {
     return createJsonResponse({ success: false, error: error.toString() });
   }
+}
+
+function syncStudentToDirectory(ss, p) {
+  if (!p.fullName) return;
+  const sheet = getOrCreateSheet(ss, TAB_STUDENT_LIST, [
+    'Mã học viên',
+    'Họ và tên học sinh',
+    'Lớp',
+    'Trường THCS',
+    'Thời điểm bắt đầu',
+    'Lần truy cập gần nhất',
+    'Số lần truy cập',
+    'Tổng thời lượng (phút)',
+    'Trạng thái phiên',
+  ]);
+
+  const key = (p.fullName + '_' + p.className).trim().toLowerCase();
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    const rowKey = (String(data[i][1]) + '_' + String(data[i][2])).trim().toLowerCase();
+    if (rowKey === key) {
+      sheet.getRange(i + 1, 6).setValue(p.timestamp || new Date().toLocaleString('vi-VN'));
+      return;
+    }
+  }
+
+  // Thêm mới nếu chưa có
+  sheet.appendRow([
+    p.studentId || 'HS-' + new Date().getTime(),
+    p.fullName,
+    p.className || '',
+    p.schoolName || '',
+    p.timestamp || new Date().toLocaleString('vi-VN'),
+    p.timestamp || new Date().toLocaleString('vi-VN'),
+    1,
+    1,
+    'Đang học tập',
+  ]);
 }
 
 function getOrCreateSheet(ss, name, headers) {

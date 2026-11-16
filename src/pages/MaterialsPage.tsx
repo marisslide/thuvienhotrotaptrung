@@ -24,6 +24,7 @@ import {
   Share2,
   Trash2,
   Upload,
+  Users,
   Video,
   X,
   Youtube,
@@ -31,6 +32,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import {
   deleteMaterialItem,
+  fetchStudentDirectory,
   getAppsScriptUrl,
   getMaterialsList,
   logStudentActivity,
@@ -39,7 +41,7 @@ import {
   setAppsScriptUrl,
   uploadFileToGoogleDrive,
 } from '../lib/googleSyncService';
-import { ActivityGroupId, MaterialItem, MaterialType } from '../types/material';
+import { ActivityGroupId, MaterialItem, MaterialType, StudentDirectoryItem } from '../types/material';
 
 const GROUP_OPTIONS: { id: ActivityGroupId; label: string; color: string; bg: string }[] = [
   { id: 'van-dong', label: 'Vận động', color: '#176B5B', bg: '#DDF3EA' },
@@ -72,6 +74,10 @@ export function MaterialsPage() {
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [showStudentsModal, setShowStudentsModal] = useState(false);
+  const [studentsList, setStudentsList] = useState<StudentDirectoryItem[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
+  const [studentSearch, setStudentSearch] = useState('');
   const [editingItem, setEditingItem] = useState<MaterialItem | null>(null);
   const [viewingItem, setViewingItem] = useState<MaterialItem | null>(null);
 
@@ -104,9 +110,24 @@ export function MaterialsPage() {
     setLoading(false);
   };
 
+  const loadStudents = async () => {
+    setStudentsLoading(true);
+    const data = await fetchStudentDirectory();
+    setStudentsList(data);
+    setStudentsLoading(false);
+  };
+
   useEffect(() => {
     loadMaterials();
-  }, []);
+    if (isAuthorizedTeacher) {
+      loadStudents();
+    }
+  }, [isAuthorizedTeacher]);
+
+  const handleOpenStudentsModal = () => {
+    loadStudents();
+    setShowStudentsModal(true);
+  };
 
   const filteredMaterials = materials.filter((item) => {
     const matchesGroup = selectedGroup === 'all' || item.groupId === selectedGroup;
@@ -268,6 +289,15 @@ export function MaterialsPage() {
           <div className="flex flex-wrap items-center gap-3 shrink-0">
             {isAuthorizedTeacher ? (
               <>
+                <button
+                  type="button"
+                  onClick={() => handleOpenStudentsModal()}
+                  className="px-4 py-3 rounded-2xl bg-white/20 text-white text-sm font-bold hover:bg-white/30 transition-all border border-white/25 inline-flex items-center gap-2 shadow-sm"
+                  title="Xem danh sách học viên và tổng thời lượng từ Google Sheet"
+                >
+                  <Users className="w-4 h-4 text-emerald-300" />
+                  Danh sách học viên ({studentsList.length})
+                </button>
                 <button
                   type="button"
                   onClick={() => handleOpenAddModal()}
@@ -919,6 +949,134 @@ export function MaterialsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Danh sách Học viên & Thời lượng sử dụng (Tab: DanhSach_HocVien) */}
+      {showStudentsModal && isAuthorizedTeacher && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-[#DCE6E3] w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+            {/* Modal Header */}
+            <div className="p-5 sm:p-6 border-b border-[#DCE6E3] flex items-center justify-between gap-4 bg-[#F8FAF9]">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-2 text-xs font-bold text-[#176B5B] uppercase">
+                  <Users className="w-4 h-4" /> Bảng theo dõi học viên (Google Sheet: DanhSach_HocVien)
+                </div>
+                <h2 className="text-xl font-bold text-[#263B3A]">
+                  Danh sách học sinh & Thời lượng truy cập App
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={loadStudents}
+                  className="px-3 py-1.5 rounded-xl border border-[#DCE6E3] text-xs font-semibold text-[#176B5B] hover:bg-white inline-flex items-center gap-1.5"
+                >
+                  <RotateCcw className={`w-3.5 h-3.5 ${studentsLoading ? 'animate-spin' : ''}`} /> Làm mới
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowStudentsModal(false)}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Filter */}
+            <div className="p-4 border-b border-[#F0F4F2] bg-white flex items-center justify-between gap-4">
+              <div className="relative w-full max-w-sm">
+                <Search className="w-4 h-4 text-[#526867] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={studentSearch}
+                  onChange={(e) => setStudentSearch(e.target.value)}
+                  placeholder="Tìm học sinh theo tên hoặc lớp..."
+                  className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-[#DCE6E3] bg-[#F6F9F8] text-xs"
+                />
+              </div>
+              <span className="text-xs text-[#526867] whitespace-nowrap">
+                Tổng số học viên: <strong>{studentsList.length}</strong> em
+              </span>
+            </div>
+
+            {/* Table */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+              {studentsLoading ? (
+                <div className="py-16 text-center text-sm text-[#526867]">
+                  Đang đồng bộ dữ liệu từ Google Sheet...
+                </div>
+              ) : studentsList.length === 0 ? (
+                <div className="py-16 text-center space-y-2">
+                  <Users className="w-10 h-10 text-gray-400 mx-auto" />
+                  <p className="text-sm font-semibold text-[#263B3A]">Chưa có học sinh nào trong bảng theo dõi</p>
+                  <p className="text-xs text-[#526867]">
+                    Khi học sinh điền thông tin và tham gia hoạt động, dữ liệu và thời lượng sẽ tự động xuất hiện tại đây và trên Google Sheet.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-[#DCE6E3]">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#EBF7F2] text-[#176B5B] uppercase font-bold border-b border-[#DCE6E3]">
+                      <tr>
+                        <th className="py-3 px-4">Mã HS</th>
+                        <th className="py-3 px-4">Họ và tên</th>
+                        <th className="py-3 px-4">Lớp</th>
+                        <th className="py-3 px-4">Trường THCS</th>
+                        <th className="py-3 px-4">Lần truy cập cuối</th>
+                        <th className="py-3 px-4 text-center">Số lần vào</th>
+                        <th className="py-3 px-4 text-center">Tổng thời lượng</th>
+                        <th className="py-3 px-4 text-center">Trạng thái</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F0F4F2]">
+                      {studentsList
+                        .filter(
+                          (s) =>
+                            s.fullName.toLowerCase().includes(studentSearch.toLowerCase()) ||
+                            s.className.toLowerCase().includes(studentSearch.toLowerCase())
+                        )
+                        .map((st, idx) => (
+                          <tr key={st.studentId || idx} className="hover:bg-[#F8FAF9]">
+                            <td className="py-3 px-4 font-mono text-[11px] text-[#526867]">{st.studentId}</td>
+                            <td className="py-3 px-4 font-bold text-[#263B3A]">{st.fullName}</td>
+                            <td className="py-3 px-4">
+                              <span className="px-2 py-0.5 rounded-md bg-[#DDF3EA] text-[#176B5B] font-bold text-[11px]">
+                                {st.className}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-[#526867]">{st.schoolName}</td>
+                            <td className="py-3 px-4 text-[#526867]">{st.lastActiveTime}</td>
+                            <td className="py-3 px-4 text-center font-bold text-[#263B3A]">{st.visitCount}</td>
+                            <td className="py-3 px-4 text-center font-bold text-[#176B5B]">
+                              {st.durationMinutes} phút
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                {st.status || 'Đang học tập'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-[#DCE6E3] bg-[#F8FAF9] flex items-center justify-between text-xs text-[#526867]">
+              <span>Dữ liệu được cập nhật tự động mỗi phút qua Google Apps Script.</span>
+              <button
+                type="button"
+                onClick={() => setShowStudentsModal(false)}
+                className="px-4 py-2 rounded-xl bg-[#176B5B] text-white font-semibold hover:bg-[#125649]"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}

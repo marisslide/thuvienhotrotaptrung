@@ -1,9 +1,11 @@
-import { ActivityGroupId, MaterialItem, StudentProfile, TeacherSession } from '../types/material';
+import { ActivityGroupId, MaterialItem, StudentDirectoryItem, StudentProfile, TeacherSession } from '../types/material';
 import { SEED_MATERIALS } from '../data/seedMaterials';
 
 const APPS_SCRIPT_STORAGE_KEY = 'google_apps_script_url';
 const LOCAL_MATERIALS_KEY = 'local_materials_database';
 const STUDENT_PROFILE_KEY = 'student_profile';
+const STUDENT_ID_KEY = 'student_unique_id';
+const STUDENT_DURATION_KEY = 'student_total_duration_minutes';
 const TEACHER_AUTH_KEY = 'auth_teacher_session';
 const STUDENT_LOGS_KEY = 'student_history_logs';
 const TEACHER_LOGS_KEY = 'teacher_history_logs';
@@ -35,10 +37,93 @@ export function getStudentProfile(): StudentProfile | null {
   }
 }
 
+export function getOrCreateStudentId(): string {
+  let id = localStorage.getItem(STUDENT_ID_KEY);
+  if (!id) {
+    id = `HS-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    localStorage.setItem(STUDENT_ID_KEY, id);
+  }
+  return id;
+}
+
 export function saveStudentProfile(profile: StudentProfile): void {
-  localStorage.setItem(STUDENT_PROFILE_KEY, JSON.stringify(profile));
+  const studentId = profile.id || getOrCreateStudentId();
+  const fullProfile: StudentProfile = { ...profile, id: studentId };
+  localStorage.setItem(STUDENT_PROFILE_KEY, JSON.stringify(fullProfile));
+  
   // Đồng bộ ngay thông tin đăng ký lên Google Sheet
   logStudentActivity('ĐĂNG KÝ THÔNG TIN', 'Học sinh bắt đầu phiên truy cập thư viện', `${profile.className} - ${profile.schoolName}`);
+  
+  // Tạo hoặc cập nhật thông tin trong DanhSach_HocVien
+  syncStudentSessionDuration(0, true, 'Bắt đầu phiên');
+}
+
+/**
+ * Cập nhật thời lượng truy cập của học sinh vào Sheet "DanhSach_HocVien"
+ */
+export async function syncStudentSessionDuration(
+  durationMinutes: number = 0,
+  isNewSession: boolean = false,
+  status: string = 'Đang học tập'
+): Promise<void> {
+  const profile = getStudentProfile();
+  if (!profile || !profile.fullName) return;
+
+  const studentId = profile.id || getOrCreateStudentId();
+  
+  // Cộng dồn thời lượng cục bộ
+  const currentTotal = Number(localStorage.getItem(STUDENT_DURATION_KEY) || '0');
+  const newTotal = currentTotal + durationMinutes;
+  localStorage.setItem(STUDENT_DURATION_KEY, newTotal.toFixed(1));
+
+  const scriptUrl = getAppsScriptUrl();
+  if (!scriptUrl) return;
+
+  const payload = {
+    studentId,
+    fullName: profile.fullName,
+    className: profile.className,
+    schoolName: profile.schoolName,
+    timestamp: new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+    durationMinutes,
+    isNewSession,
+    status,
+  };
+
+  try {
+    await fetch(scriptUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'SYNC_STUDENT_SESSION',
+        payload,
+      }),
+    });
+  } catch (err) {
+    console.warn('Lỗi đồng bộ thời lượng học sinh:', err);
+  }
+}
+
+/**
+ * Lấy danh sách học viên và thời lượng từ Google Sheet (Dành cho Giáo viên)
+ */
+export async function fetchStudentDirectory(): Promise<StudentDirectoryItem[]> {
+  const scriptUrl = getAppsScriptUrl();
+  if (!scriptUrl) return [];
+
+  try {
+    const res = await fetch(`${scriptUrl}?action=GET_STUDENTS`, { method: 'GET' });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.students)) {
+        return data.students;
+      }
+    }
+  } catch (e) {
+    console.warn('Không thể tải danh sách học viên từ Google Sheet:', e);
+  }
+  return [];
 }
 
 export function getTeacherSession(): TeacherSession | null {
