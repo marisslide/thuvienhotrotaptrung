@@ -10,6 +10,7 @@ import { ExpressionsPage } from './pages/ExpressionsPage';
 import { GroupsPage } from './pages/GroupsPage';
 import { GuidePage } from './pages/GuidePage';
 import { HomePage } from './pages/HomePage';
+import { MaterialsPage } from './pages/MaterialsPage';
 import { TeacherLoginPage } from './pages/TeacherLoginPage';
 
 function ScrollToTop() {
@@ -71,6 +72,8 @@ export default function App() {
                 <Route path="/nhom-hoat-dong" element={<GroupsPage />} />
                 <Route path="/hoat-dong" element={<ActivitiesPage />} />
                 <Route path="/hoat-dong/:id" element={<ActivityDetailPage />} />
+                <Route path="/hoc-lieu" element={<MaterialsPage />} />
+                <Route path="/materials" element={<MaterialsPage />} />
                 <Route path="/huong-dan" element={<GuidePage />} />
                 <Route path="/dang-nhap" element={<TeacherLoginPage />} />
                 <Route path="/quan-tri" element={<AdminDashboardPage />} />

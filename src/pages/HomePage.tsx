@@ -18,7 +18,7 @@ export function HomePage() {
     <div>
       {/* 1. Hero Section */}
       <section className="bg-white border-b border-[#DCE6E3]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-12 lg:py-16">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-stretch">
             <div className="lg:col-span-7 flex flex-col justify-center">
               <p className="text-sm font-semibold text-[#7563B8] mb-3">
@@ -46,6 +46,14 @@ export function HomePage() {
                 >
                   Khám phá thư viện ({publishedCount})
                   <ArrowRight className="w-4 h-4" />
+                </Link>
+
+                <Link
+                  to="/hoc-lieu"
+                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-[#263B3A] text-white text-sm sm:text-base font-semibold hover:bg-[#1a2928] transition-colors whitespace-nowrap shrink-0 shadow-2xs"
+                >
+                  <BookOpen className="w-4 h-4 text-emerald-400" />
+                  Kho Học liệu (Video, Slide, Word)
                 </Link>
 
                 <Link
@@ -111,7 +119,7 @@ export function HomePage() {
       </section>
 
       {/* 2. Quick Expression Selector */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+      <section className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-14">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
           <div>
             <p className="text-xs font-semibold text-[#7563B8] mb-1.5">Tra cứu theo tình huống</p>
@@ -153,7 +161,7 @@ export function HomePage() {
 
       {/* 3. Six Activity Groups Overview */}
       <section className="bg-white border-y border-[#DCE6E3] py-14">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
             <div>
               <p className="text-xs font-semibold text-[#176B5B] mb-1.5">Cấu trúc thư viện</p>
@@ -210,7 +218,7 @@ export function HomePage() {
       </section>
 
       {/* 4. Featured Activities */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+      <section className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-14">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
           <div>
             <p className="text-xs font-semibold text-[#176B5B] mb-1.5">Sẵn sàng áp dụng ngay</p>
@@ -245,7 +253,7 @@ export function HomePage() {
       </section>
 
       {/* 5. Pedagogical Scope & Classroom Projector Ready */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
+      <section className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 pb-6">
         <div className="rounded-3xl bg-[#DDF3EA] border border-[#B8E2D1] p-6 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           <div className="lg:col-span-8 space-y-3">
             <div className="inline-flex items-center gap-2 text-xs font-bold text-[#176B5B]">

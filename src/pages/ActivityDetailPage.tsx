@@ -108,7 +108,7 @@ export function ActivityDetailPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+    <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-8 sm:py-12">
       {/* Breadcrumb & Quick Actions */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6 no-print">
         <Link
