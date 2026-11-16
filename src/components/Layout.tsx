@@ -304,7 +304,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-[#526867]">
             <p>© {new Date().getFullYear()} Thư viện Hoạt động Hỗ trợ Tái tập trung THCS. Quản trị: Cô Diệu Hiền.</p>
             <Link to="/dang-nhap" className="hover:text-[#176B5B] font-semibold transition-colors">
-              Cổng quản trị dành cho Giáo viên (Dieuhien / 2026)
+              Cổng quản trị dành cho Giáo viên
             </Link>
           </div>
         </div>

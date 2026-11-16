@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return true;
       }
 
-      setAuthError('Tên đăng nhập hoặc mật khẩu không đúng. Mặc định: Dieuhien / 2026');
+      setAuthError('Tên đăng nhập hoặc mật khẩu không chính xác. Vui lòng thử lại.');
       return false;
     },
     []

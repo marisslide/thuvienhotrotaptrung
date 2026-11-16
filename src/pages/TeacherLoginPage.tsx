@@ -28,8 +28,8 @@ export function TeacherLoginPage() {
     logout,
   } = useAuth();
 
-  const [username, setUsername] = useState('Dieuhien');
-  const [password, setPassword] = useState('2026');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const [requestData, setRequestData] = useState<TeacherAccessRequest | null>(null);
@@ -57,7 +57,7 @@ export function TeacherLoginPage() {
     if (ok) {
       navigate('/hoc-lieu');
     } else {
-      setLoginError('Tên đăng nhập hoặc mật khẩu không chính xác. Mặc định: Dieuhien / 2026');
+      setLoginError('Tên đăng nhập hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.');
     }
   };
 
@@ -182,7 +182,7 @@ export function TeacherLoginPage() {
                     required
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Dieuhien"
+                    placeholder="Nhập tên đăng nhập..."
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCE6E3] bg-white text-sm text-[#263B3A] focus:outline-none focus:border-[#176B5B]"
                   />
                 </div>
@@ -196,24 +196,16 @@ export function TeacherLoginPage() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="2026"
+                    placeholder="Nhập mật khẩu..."
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCE6E3] bg-white text-sm text-[#263B3A] focus:outline-none focus:border-[#176B5B]"
                   />
                 </div>
 
-                <div className="bg-white rounded-xl p-3 border border-[#E7EFEC] text-xs text-[#526867] space-y-1">
-                  <div className="font-semibold text-[#176B5B]">Tài khoản mẫu mặc định:</div>
-                  <div className="flex items-center justify-between">
-                    <span>Tên đăng nhập: <strong>Dieuhien</strong></span>
-                    <span>Mật khẩu: <strong>2026</strong></span>
-                  </div>
-                </div>
-
                 <button
                   type="submit"
-                  className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#176B5B] text-white text-sm font-semibold hover:bg-[#125649] transition-colors"
+                  className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#176B5B] text-white text-sm font-semibold hover:bg-[#125649] transition-colors shadow-xs"
                 >
-                  <LogIn className="w-4 h-4" /> Đăng nhập ngay
+                  <LogIn className="w-4 h-4" /> Đăng nhập
                 </button>
               </form>
             </div>
