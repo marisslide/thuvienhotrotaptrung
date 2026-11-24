@@ -139,7 +139,7 @@ export function HomePage() {
           {STUDENT_EXPRESSIONS.map((exp) => (
             <Link
               key={exp.id}
-              to={`/hoat-dong?bieuHien=${exp.id}`}
+              to={`/nhan-dien?chon=${exp.id}`}
               className="group bg-white rounded-2xl border border-[#DCE6E3] p-5 hover:border-[#176B5B] hover:shadow-sm transition-all"
             >
               <div className="flex items-center justify-between gap-3 mb-2">

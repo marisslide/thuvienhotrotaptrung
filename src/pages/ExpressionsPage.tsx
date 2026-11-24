@@ -31,9 +31,9 @@ export function ExpressionsPage() {
   const [materialsLoading, setMaterialsLoading] = useState(true);
   const [viewingMaterial, setViewingMaterial] = useState<MaterialItem | null>(null);
 
-  const initialParam = searchParams.get('chon') as ExpressionId | null;
-  const validInitial = STUDENT_EXPRESSIONS.some((e) => e.id === initialParam)
-    ? (initialParam as ExpressionId)
+  const rawParam = (searchParams.get('chon') || searchParams.get('bieuHien') || searchParams.get('id')) as ExpressionId | null;
+  const validInitial = STUDENT_EXPRESSIONS.some((e) => e.id === rawParam)
+    ? (rawParam as ExpressionId)
     : STUDENT_EXPRESSIONS[0].id;
 
   const [selectedId, setSelectedId] = useState<ExpressionId>(validInitial);
@@ -48,10 +48,11 @@ export function ExpressionsPage() {
   }, []);
 
   useEffect(() => {
-    if (initialParam && STUDENT_EXPRESSIONS.some((e) => e.id === initialParam)) {
-      setSelectedId(initialParam);
+    const currentParam = (searchParams.get('chon') || searchParams.get('bieuHien') || searchParams.get('id')) as ExpressionId | null;
+    if (currentParam && STUDENT_EXPRESSIONS.some((e) => e.id === currentParam)) {
+      setSelectedId(currentParam);
     }
-  }, [initialParam]);
+  }, [searchParams]);
 
   const handleSelect = (id: ExpressionId) => {
     setSelectedId(id);

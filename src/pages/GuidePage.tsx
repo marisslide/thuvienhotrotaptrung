@@ -126,7 +126,7 @@ export function GuidePage() {
                 <tr key={exp.id} className="align-top">
                   <td className="py-4 pr-4 font-semibold text-[#263B3A] whitespace-nowrap">
                     <Link
-                      to={`/hoat-dong?bieuHien=${exp.id}`}
+                      to={`/nhan-dien?chon=${exp.id}`}
                       className="hover:text-[#176B5B] hover:underline"
                     >
                       {exp.order}. {exp.label}
