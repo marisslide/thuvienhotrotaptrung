@@ -4,6 +4,7 @@ import {
   BookOpen,
   Edit2,
   GraduationCap,
+  Lock,
   LogOut,
   Menu,
   ShieldCheck,
@@ -13,8 +14,11 @@ import {
 import { useAuth } from '../context/AuthContext';
 import {
   getStudentProfile,
+  getUserRole,
   logStudentActivity,
+  setUserRole,
   syncStudentSessionDuration,
+  UserRole,
 } from '../lib/googleSyncService';
 import { StudentProfile } from '../types/material';
 import { StudentWelcomeModal } from './StudentWelcomeModal';
@@ -33,22 +37,23 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { user, teacherSession, isAuthorizedTeacher, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Quản lý thông tin học sinh
+  // Quản lý vai trò (Giáo viên / Học sinh)
+  const [userRole, setUserRoleState] = useState<UserRole>(() => getUserRole());
   const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(() =>
     getStudentProfile()
   );
-  const [showStudentModal, setShowStudentModal] = useState(false);
+  const [showRoleModal, setShowRoleModal] = useState(false);
 
   useEffect(() => {
-    // Nếu chưa có thông tin học sinh và chưa đăng nhập giáo viên thì mở modal
-    if (!isAuthorizedTeacher && !studentProfile) {
-      setShowStudentModal(true);
+    // Nếu chưa chọn vai trò và chưa đăng nhập admin thì mở modal chọn vai trò
+    if (!isAuthorizedTeacher && !userRole) {
+      setShowRoleModal(true);
     }
-  }, [isAuthorizedTeacher, studentProfile]);
+  }, [isAuthorizedTeacher, userRole]);
 
-  // Ghi nhận nhật ký chuyển trang của học sinh
+  // Ghi nhận nhật ký chuyển trang của học sinh (chỉ khi là học sinh)
   useEffect(() => {
-    if (!isAuthorizedTeacher && studentProfile) {
+    if (!isAuthorizedTeacher && userRole === 'student' && studentProfile) {
       const pageNames: Record<string, string> = {
         '/': 'Trang chủ',
         '/nhan-dien': 'Nhận diện biểu hiện',
@@ -60,11 +65,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
       const title = pageNames[location.pathname] || location.pathname;
       logStudentActivity('TRUY CẬP TRANG', title);
     }
-  }, [location.pathname, isAuthorizedTeacher, studentProfile]);
+  }, [location.pathname, isAuthorizedTeacher, userRole, studentProfile]);
 
   // Tự động tính thời lượng truy cập của học viên và đồng bộ vào Sheet "DanhSach_HocVien"
   useEffect(() => {
-    if (isAuthorizedTeacher || !studentProfile) return;
+    if (isAuthorizedTeacher || userRole !== 'student' || !studentProfile) return;
 
     // Gửi tín hiệu bắt đầu phiên
     syncStudentSessionDuration(0, true, 'Đang học tập');
@@ -84,21 +89,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
       clearInterval(interval);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [isAuthorizedTeacher, studentProfile]);
+  }, [isAuthorizedTeacher, userRole, studentProfile]);
 
   const teacherName = teacherSession?.displayName || user?.displayName || 'Cô Diệu Hiền';
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F6F9F8] text-[#263B3A]">
-      {/* Modal đăng ký / chỉnh sửa thông tin học sinh */}
+      {/* Modal chọn vai trò Giáo viên / Học sinh & nhập thông tin */}
       <StudentWelcomeModal
-        isOpen={showStudentModal}
-        onSuccess={(profile) => {
-          setStudentProfile(profile);
-          setShowStudentModal(false);
+        isOpen={showRoleModal}
+        onSuccess={(selectedRole, profile) => {
+          setUserRoleState(selectedRole);
+          if (profile) {
+            setStudentProfile(profile);
+          }
+          setShowRoleModal(false);
         }}
-        canCloseWithoutSave={!!studentProfile}
-        onClose={() => setShowStudentModal(false)}
+        canCloseWithoutSave={!!userRole}
+        onClose={() => setShowRoleModal(false)}
       />
 
       {/* Top Bar (Tối ưu chiều ngang tối đa cho màn hình lớn và máy chiếu) */}
@@ -168,37 +176,50 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </button>
               </div>
             ) : (
-              /* Nếu là học sinh: Hiển thị badge học sinh và nút sửa thông tin */
+              /* Nếu là Giáo viên hoặc Học sinh trải nghiệm */
               <div className="flex items-center gap-2">
-                {studentProfile ? (
+                {userRole === 'teacher' ? (
                   <button
                     type="button"
-                    onClick={() => setShowStudentModal(true)}
-                    className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#EBF7F2] border border-[#B8E2D1] text-xs font-semibold text-[#176B5B] hover:bg-[#DDF3EA] transition-colors"
-                    title="Bấm để chỉnh sửa thông tin học sinh"
+                    onClick={() => setShowRoleModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#EBF7F2] border border-[#B8E2D1] text-xs font-semibold text-[#176B5B] hover:bg-[#DDF3EA] transition-colors cursor-pointer"
+                    title="Bấm để đổi vai trò"
                   >
-                    <GraduationCap className="w-3.5 h-3.5 text-[#176B5B] shrink-0" />
+                    <span className="text-sm">👨‍🏫</span>
+                    <span className="font-bold">Giáo viên</span>
+                    <span className="text-[10px] text-[#176B5B]/70 underline ml-0.5 hidden sm:inline">Đổi vai trò</span>
+                  </button>
+                ) : userRole === 'student' && studentProfile ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowRoleModal(true)}
+                    className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#E0F2FE] border border-[#BAE6FD] text-xs font-semibold text-[#0284C7] hover:bg-[#BAE6FD] transition-colors cursor-pointer"
+                    title="Bấm để chỉnh sửa thông tin hoặc đổi vai trò"
+                  >
+                    <GraduationCap className="w-3.5 h-3.5 text-[#0284C7] shrink-0" />
                     <span className="hidden sm:inline font-bold">{studentProfile.fullName}</span>
-                    <span className="px-1.5 py-0.5 rounded-md bg-[#176B5B] text-white text-[10px] font-bold">
+                    <span className="px-1.5 py-0.5 rounded-md bg-[#0284C7] text-white text-[10px] font-bold">
                       {studentProfile.className}
                     </span>
-                    <Edit2 className="w-3 h-3 text-[#176B5B]/70 ml-0.5 hidden sm:inline" />
+                    <Edit2 className="w-3 h-3 text-[#0284C7]/70 ml-0.5 hidden sm:inline" />
                   </button>
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setShowStudentModal(true)}
-                    className="px-3 py-1.5 rounded-xl bg-[#176B5B]/10 text-[#176B5B] text-xs font-bold hover:bg-[#176B5B]/20 transition-colors"
+                    onClick={() => setShowRoleModal(true)}
+                    className="px-3 py-1.5 rounded-xl bg-[#176B5B]/10 text-[#176B5B] text-xs font-bold hover:bg-[#176B5B]/20 transition-colors cursor-pointer"
                   >
-                    Điền thông tin học sinh
+                    Chọn vai trò
                   </button>
                 )}
 
                 <Link
                   to="/dang-nhap"
-                  className="inline-flex items-center justify-center px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-[#263B3A] text-white hover:bg-[#182625] transition-colors whitespace-nowrap shadow-2xs"
+                  className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-[#263B3A] text-white hover:bg-[#182625] transition-colors whitespace-nowrap shadow-2xs"
+                  title="Khu vực dành cho Quản trị viên đăng tải học liệu và quản lý hệ thống"
                 >
-                  Giáo viên
+                  <Lock className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Quản trị</span>
                 </Link>
               </div>
             )}
@@ -237,27 +258,36 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </NavLink>
             ))}
             <div className="pt-2 border-t border-[#DCE6E3] space-y-2">
-              {studentProfile && (
-                <div className="p-2.5 rounded-xl bg-[#F6F9F8] text-xs text-[#526867] flex items-center justify-between">
-                  <span>Học sinh: <strong>{studentProfile.fullName}</strong> ({studentProfile.className})</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMobileOpen(false);
-                      setShowStudentModal(true);
-                    }}
-                    className="text-[#176B5B] font-bold hover:underline"
-                  >
-                    Đổi
-                  </button>
-                </div>
-              )}
+              <div className="p-2.5 rounded-xl bg-[#F6F9F8] text-xs text-[#526867] flex items-center justify-between">
+                <span>
+                  Vai trò:{' '}
+                  <strong>
+                    {isAuthorizedTeacher
+                      ? 'Quản trị viên'
+                      : userRole === 'teacher'
+                      ? 'Giáo viên'
+                      : studentProfile
+                      ? `Học sinh: ${studentProfile.fullName}`
+                      : 'Chưa chọn'}
+                  </strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileOpen(false);
+                    setShowRoleModal(true);
+                  }}
+                  className="text-[#176B5B] font-bold hover:underline"
+                >
+                  Đổi
+                </button>
+              </div>
               <Link
                 to={isAuthorizedTeacher ? '/quan-tri' : '/dang-nhap'}
                 onClick={() => setMobileOpen(false)}
                 className="block w-full text-center px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#176B5B] text-white"
               >
-                {isAuthorizedTeacher ? 'Khu vực Quản trị' : 'Đăng nhập Giáo viên'}
+                {isAuthorizedTeacher ? 'Khu vực Quản trị' : 'Đăng nhập Quản trị (Admin)'}
               </Link>
             </div>
           </div>
@@ -327,7 +357,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-[#526867]">
-            <p>© {new Date().getFullYear()} Thư viện Hoạt động Hỗ trợ Tái tập trung THCS. Quản trị: Cô Diệu Hiền.</p>
+            <p>© 2026 Thư viện Hoạt động Hỗ trợ Tái tập trung THCS. Quản trị: Tô Nguyễn Huy Hoàng, Dương Quang Long, Huỳnh Thị Diệu Hiền.</p>
             <Link to="/dang-nhap" className="hover:text-[#176B5B] font-semibold transition-colors">
               Cổng quản trị dành cho Giáo viên
             </Link>

@@ -42,6 +42,7 @@ import {
   uploadFileToGoogleDrive,
 } from '../lib/googleSyncService';
 import { ActivityGroupId, MaterialItem, MaterialType, StudentDirectoryItem } from '../types/material';
+import { getAutoThumbnail } from '../data/seedMaterials';
 
 const GROUP_OPTIONS: { id: ActivityGroupId; label: string; color: string; bg: string }[] = [
   { id: 'van-dong', label: 'Vận động', color: '#176B5B', bg: '#DDF3EA' },
@@ -193,6 +194,7 @@ export function MaterialsPage() {
           groupName,
           type: formData.type,
           url: formData.url,
+          thumbnailUrl: getAutoThumbnail(formData.url, formData.groupId),
           description: formData.description,
           studentProductExample: formData.studentProductExample,
           author: teacherSession?.displayName || 'Cô Diệu Hiền',
@@ -484,22 +486,14 @@ export function MaterialsPage() {
                 <div>
                   {/* Card Thumbnail / Header Preview */}
                   <div className="relative aspect-video bg-[#263B3A] overflow-hidden">
-                    {item.thumbnailUrl ? (
-                      <img
-                        src={item.thumbnailUrl}
-                        alt={item.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-[#176B5B] to-[#263B3A] text-white">
-                        {item.type === 'video' && <Video className="w-12 h-12 opacity-80" />}
-                        {item.type === 'powerpoint' && <FileSpreadsheet className="w-12 h-12 opacity-80" />}
-                        {item.type === 'word' && <FileText className="w-12 h-12 opacity-80" />}
-                        {item.type === 'pdf' && <FileCheck className="w-12 h-12 opacity-80" />}
-                        {item.type === 'canva' && <Share2 className="w-12 h-12 opacity-80" />}
-                        {item.type === 'image' && <Eye className="w-12 h-12 opacity-80" />}
-                      </div>
-                    )}
+                    <img
+                      src={item.thumbnailUrl || getAutoThumbnail(item.url, item.groupId)}
+                      alt={item.title}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = getAutoThumbnail('', item.groupId);
+                      }}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
 
                     {/* Group Badge Overlay */}
                     <div className="absolute top-3 left-3 flex items-center gap-1.5">
@@ -1033,11 +1027,14 @@ export function MaterialsPage() {
                     </thead>
                     <tbody className="divide-y divide-[#F0F4F2]">
                       {studentsList
-                        .filter(
-                          (s) =>
-                            s.fullName.toLowerCase().includes(studentSearch.toLowerCase()) ||
-                            s.className.toLowerCase().includes(studentSearch.toLowerCase())
-                        )
+                        .filter((s) => {
+                          const query = String(studentSearch || '').toLowerCase().trim();
+                          if (!query) return true;
+                          const name = String(s.fullName || '').toLowerCase();
+                          const cls = String(s.className || '').toLowerCase();
+                          const school = String(s.schoolName || '').toLowerCase();
+                          return name.includes(query) || cls.includes(query) || school.includes(query);
+                        })
                         .map((st, idx) => (
                           <tr key={st.studentId || idx} className="hover:bg-[#F8FAF9]">
                             <td className="py-3 px-4 font-mono text-[11px] text-[#526867]">{st.studentId}</td>

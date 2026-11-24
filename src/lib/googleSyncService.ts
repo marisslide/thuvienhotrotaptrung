@@ -1,14 +1,30 @@
 import { ActivityGroupId, MaterialItem, StudentDirectoryItem, StudentProfile, TeacherSession } from '../types/material';
-import { SEED_MATERIALS } from '../data/seedMaterials';
+import { getAutoThumbnail, GROUP_DEFAULT_COVERS, SEED_MATERIALS } from '../data/seedMaterials';
 
 const APPS_SCRIPT_STORAGE_KEY = 'google_apps_script_url';
 const LOCAL_MATERIALS_KEY = 'local_materials_database';
 const STUDENT_PROFILE_KEY = 'student_profile';
+const USER_ROLE_KEY = 'app_user_role';
 const STUDENT_ID_KEY = 'student_unique_id';
 const STUDENT_DURATION_KEY = 'student_total_duration_minutes';
 const TEACHER_AUTH_KEY = 'auth_teacher_session';
 const STUDENT_LOGS_KEY = 'student_history_logs';
 const TEACHER_LOGS_KEY = 'teacher_history_logs';
+const CACHED_STUDENTS_KEY = 'cached_student_directory';
+
+export type UserRole = 'teacher' | 'student' | null;
+
+export function getUserRole(): UserRole {
+  return (localStorage.getItem(USER_ROLE_KEY) as UserRole) || null;
+}
+
+export function setUserRole(role: UserRole): void {
+  if (role) {
+    localStorage.setItem(USER_ROLE_KEY, role);
+  } else {
+    localStorage.removeItem(USER_ROLE_KEY);
+  }
+}
 
 export const DEFAULT_APPS_SCRIPT_URL =
   'https://script.google.com/macros/s/AKfycbwyWvlc6f32RTL_c-efa1QmaU7emBj6zQj4qfTLmA_bAVS6flwqxyE1sCAMt-JdxmYLYw/exec';
@@ -50,6 +66,7 @@ export function saveStudentProfile(profile: StudentProfile): void {
   const studentId = profile.id || getOrCreateStudentId();
   const fullProfile: StudentProfile = { ...profile, id: studentId };
   localStorage.setItem(STUDENT_PROFILE_KEY, JSON.stringify(fullProfile));
+  setUserRole('student');
   
   // Đồng bộ ngay thông tin đăng ký lên Google Sheet
   logStudentActivity('ĐĂNG KÝ THÔNG TIN', 'Học sinh bắt đầu phiên truy cập thư viện', `${profile.className} - ${profile.schoolName}`);
@@ -105,25 +122,116 @@ export async function syncStudentSessionDuration(
   }
 }
 
+function cleanClassName(val: any): string {
+  if (!val && val !== 0) return 'Chưa có lớp';
+  const str = String(val).trim();
+  // Nếu Google Sheet chuyển 8/7 thành ngày dạng ISO
+  if (str.includes('T') && str.endsWith('Z')) {
+    try {
+      const d = new Date(str);
+      const m = d.getUTCMonth() + 1;
+      const day = d.getUTCDate();
+      return `Lớp ${m}/${day}`;
+    } catch {
+      return str;
+    }
+  }
+  return str.startsWith('Lớp ') || str.startsWith('9') || str.startsWith('8') || str.startsWith('7') || str.startsWith('6') ? str : `Lớp ${str}`;
+}
+
 /**
- * Lấy danh sách học viên và thời lượng từ Google Sheet (Dành cho Giáo viên)
+ * Lấy danh sách học viên và thời lượng từ Google Sheet (Dành cho Giáo viên & Admin)
+ * Tự động làm sạch dữ liệu, ép kiểu chuỗi an toàn 100% để chống lỗi crash toLowerCase
  */
 export async function fetchStudentDirectory(): Promise<StudentDirectoryItem[]> {
   const scriptUrl = getAppsScriptUrl();
-  if (!scriptUrl) return [];
+  let rawList: any[] = [];
+
+  if (scriptUrl) {
+    try {
+      const res = await fetch(`${scriptUrl}?action=GET_STUDENTS`, { method: 'GET' });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.students)) {
+          rawList = data.students;
+        }
+      }
+    } catch (e) {
+      console.warn('Không thể tải danh sách học viên trực tiếp từ Google Sheet:', e);
+    }
+  }
+
+  // Fallback sang bộ nhớ cache nếu chưa có dữ liệu mạng
+  if (rawList.length === 0) {
+    try {
+      const cached = localStorage.getItem(CACHED_STUDENTS_KEY);
+      if (cached) {
+        rawList = JSON.parse(cached);
+      }
+    } catch {
+      rawList = [];
+    }
+  }
+
+  // Nếu trên thiết bị này có học sinh đã đăng ký thì luôn đảm bảo hiển thị
+  const currentStudent = getStudentProfile();
+  if (currentStudent && currentStudent.fullName) {
+    const localTotal = Number(localStorage.getItem(STUDENT_DURATION_KEY) || '1');
+    const existingIdx = rawList.findIndex(
+      (r: any) => String(r.fullName).trim().toLowerCase() === currentStudent.fullName.trim().toLowerCase()
+    );
+    if (existingIdx === -1) {
+      rawList.unshift({
+        studentId: currentStudent.id || 'HS-HIEN-TAI',
+        fullName: currentStudent.fullName,
+        className: currentStudent.className,
+        schoolName: currentStudent.schoolName,
+        startTime: currentStudent.registeredAt || new Date().toLocaleString('vi-VN'),
+        lastActiveTime: new Date().toLocaleString('vi-VN'),
+        visitCount: 1,
+        durationMinutes: localTotal,
+        status: 'Đang học tập',
+      });
+    }
+  }
+
+  // Ép kiểu chuỗi an toàn 100% để không bao giờ bị lỗi toLowerCase
+  const cleaned: StudentDirectoryItem[] = rawList.map((s: any, idx: number) => ({
+    studentId: String(s.studentId || `HS-${idx + 1}`),
+    fullName: String(s.fullName || 'Học sinh').trim(),
+    className: cleanClassName(s.className),
+    schoolName: String(s.schoolName || 'THCS').trim(),
+    startTime: String(s.startTime || ''),
+    lastActiveTime: String(s.lastActiveTime || ''),
+    visitCount: Math.max(1, Number(s.visitCount) || 1),
+    durationMinutes: Math.max(1, Number(s.durationMinutes) || 1),
+    status: String(s.status || 'Đang học tập'),
+  }));
+
+  // Gộp các bản ghi trùng lặp của cùng 1 học sinh theo Tên + Lớp
+  const map = new Map<string, StudentDirectoryItem>();
+  for (const item of cleaned) {
+    const key = `${item.fullName.toLowerCase()}__${item.className.toLowerCase()}`;
+    if (!map.has(key)) {
+      map.set(key, { ...item });
+    } else {
+      const exist = map.get(key)!;
+      exist.visitCount = Math.max(exist.visitCount, item.visitCount) + 1;
+      exist.durationMinutes = Math.max(exist.durationMinutes, item.durationMinutes);
+      exist.lastActiveTime = item.lastActiveTime || exist.lastActiveTime;
+      exist.status = item.status || exist.status;
+    }
+  }
+
+  const result = Array.from(map.values()).sort(
+    (a, b) => b.durationMinutes - a.durationMinutes
+  );
 
   try {
-    const res = await fetch(`${scriptUrl}?action=GET_STUDENTS`, { method: 'GET' });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data.students)) {
-        return data.students;
-      }
-    }
-  } catch (e) {
-    console.warn('Không thể tải danh sách học viên từ Google Sheet:', e);
-  }
-  return [];
+    localStorage.setItem(CACHED_STUDENTS_KEY, JSON.stringify(result));
+  } catch {}
+
+  return result;
 }
 
 export function getTeacherSession(): TeacherSession | null {
@@ -280,16 +388,20 @@ function mergeMaterials(defaults: MaterialItem[], custom: MaterialItem[]): Mater
  * Thêm hoặc chỉnh sửa học liệu
  */
 export async function saveMaterialItem(material: MaterialItem): Promise<void> {
+  const itemToSave: MaterialItem = {
+    ...material,
+    thumbnailUrl: material.thumbnailUrl || getAutoThumbnail(material.url, material.groupId),
+  };
   const current = await getMaterialsList();
-  const index = current.findIndex((m) => m.id === material.id);
+  const index = current.findIndex((m) => m.id === itemToSave.id);
   let updated: MaterialItem[];
   if (index >= 0) {
     updated = [...current];
-    updated[index] = material;
-    logTeacherActivity('CẬP NHẬT HỌC LIỆU', material.title, `Nhóm: ${material.groupName} - Loại: ${material.type}`);
+    updated[index] = itemToSave;
+    logTeacherActivity('CẬP NHẬT HỌC LIỆU', itemToSave.title, `Nhóm: ${itemToSave.groupName} - Loại: ${itemToSave.type}`);
   } else {
-    updated = [material, ...current];
-    logTeacherActivity('THÊM HỌC LIỆU MỚI', material.title, `Nhóm: ${material.groupName} - Loại: ${material.type}`);
+    updated = [itemToSave, ...current];
+    logTeacherActivity('THÊM HỌC LIỆU MỚI', itemToSave.title, `Nhóm: ${itemToSave.groupName} - Loại: ${itemToSave.type}`);
   }
 
   localStorage.setItem(LOCAL_MATERIALS_KEY, JSON.stringify(updated));
@@ -303,7 +415,7 @@ export async function saveMaterialItem(material: MaterialItem): Promise<void> {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'SAVE_MATERIAL',
-          payload: material,
+          payload: itemToSave,
         }),
       });
     } catch (err) {
@@ -402,6 +514,7 @@ export async function uploadFileToGoogleDrive(
     groupName: meta.groupName,
     type: meta.type,
     url: finalUrl,
+    thumbnailUrl: getAutoThumbnail(finalUrl, meta.groupId),
     description: meta.description,
     studentProductExample: meta.studentProductExample || 'Tài liệu tải lên từ giáo viên',
     driveFileId: driveId || undefined,

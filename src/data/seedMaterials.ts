@@ -1,5 +1,25 @@
 import { MaterialItem } from '../types/material';
 
+export const GROUP_DEFAULT_COVERS: Record<string, string> = {
+  'van-dong': 'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&q=80',
+  'quan-sat': 'https://images.unsplash.com/photo-1546776310-eef45dd6d63c?auto=format&fit=crop&w=800&q=80',
+  'ghi-nho': 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=800&q=80',
+  'phan-xa': 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=80',
+  'tuong-tac': 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=800&q=80',
+  'thu-gian': 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=800&q=80',
+};
+
+export function getAutoThumbnail(url: string, groupId: string, customThumb?: string): string {
+  if (customThumb && customThumb.trim().length > 0) return customThumb.trim();
+  if (url) {
+    const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    if (ytMatch && ytMatch[1]) {
+      return `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+    }
+  }
+  return GROUP_DEFAULT_COVERS[groupId] || GROUP_DEFAULT_COVERS['van-dong'];
+}
+
 export const SEED_MATERIALS: MaterialItem[] = [
   // 1. Nhóm Vận động
   {
